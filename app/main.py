@@ -90,7 +90,7 @@ class App:
                     self.root.after(0, self.status_var.set, "Match found")
 
                     if not self.notification_sent:
-                        success = send_discord_message("🚨 RUN BACK — MATCH FOUND")
+                        success = send_discord_message("RUN BACK YOU FOOL")
                         if success:
                             self.notification_sent = True
                             self.root.after(0, self.status_var.set, "Notification sent")
