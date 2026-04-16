@@ -3,6 +3,7 @@ import time
 import tkinter as tk
 from tkinter import ttk
 
+from config import load_config, save_config
 from lcu_detector import LeagueClientDetector
 from notifier import send_discord_message
 
@@ -11,7 +12,7 @@ class App:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.root.title("LoL Queue Notifier")
-        self.root.geometry("320x180")
+        self.root.geometry("430x430")
         self.root.resizable(False, False)
 
         self.detector = LeagueClientDetector()
@@ -21,6 +22,13 @@ class App:
         self.worker_thread = None
         self.stop_event = threading.Event()
 
+        config = load_config()
+
+        self.webhook_var = tk.StringVar(value=config.get("discord_webhook_url", ""))
+        self.mention_user_id_var = tk.StringVar(value=config.get("mention_user_id", ""))
+        self.custom_message_var = tk.StringVar(
+            value=config.get("custom_message", "RUN BACK YOU FOOL — MATCH IS FOUND")
+        )
         self.status_var = tk.StringVar(value="Idle")
         self.phase_var = tk.StringVar(value="Phase: -")
 
@@ -30,22 +38,63 @@ class App:
         frame = ttk.Frame(self.root, padding=16)
         frame.pack(fill="both", expand=True)
 
-        title = ttk.Label(frame, text="League Queue Notifier", font=("Arial", 14, "bold"))
-        title.pack(pady=(0, 12))
+        ttk.Label(
+            frame,
+            text="League Queue Notifier",
+            font=("Arial", 14, "bold"),
+        ).pack(pady=(0, 12))
 
-        self.status_label = ttk.Label(frame, textvariable=self.status_var)
-        self.status_label.pack(pady=(0, 6))
+        ttk.Label(frame, text="Discord Webhook URL").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.webhook_var).pack(fill="x", pady=(0, 10))
 
-        self.phase_label = ttk.Label(frame, textvariable=self.phase_var)
-        self.phase_label.pack(pady=(0, 12))
+        ttk.Label(frame, text="Discord User ID for ping (optional)").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.mention_user_id_var).pack(fill="x", pady=(0, 10))
 
-        self.toggle_button = ttk.Button(frame, text="Notify me please", command=self.toggle_monitoring)
+        ttk.Label(frame, text="Custom message").pack(anchor="w")
+        ttk.Entry(frame, textvariable=self.custom_message_var).pack(fill="x", pady=(0, 12))
+
+        ttk.Label(frame, textvariable=self.status_var).pack(pady=(0, 4))
+        ttk.Label(frame, textvariable=self.phase_var).pack(pady=(0, 12))
+
+        ttk.Button(frame, text="Save settings", command=self.save_settings).pack(fill="x", pady=(0, 8))
+        ttk.Button(frame, text="Test Discord", command=self.test_discord).pack(fill="x", pady=(0, 8))
+
+        self.toggle_button = ttk.Button(
+            frame,
+            text="Notify me please",
+            command=self.toggle_monitoring,
+        )
         self.toggle_button.pack(fill="x", pady=(0, 8))
 
-        quit_button = ttk.Button(frame, text="Quit", command=self.on_close)
-        quit_button.pack(fill="x")
+        ttk.Button(frame, text="Quit", command=self.on_close).pack(fill="x")
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def get_current_config(self) -> dict:
+        return {
+            "discord_webhook_url": self.webhook_var.get().strip(),
+            "mention_user_id": self.mention_user_id_var.get().strip(),
+            "custom_message": self.custom_message_var.get().strip() or "🚨 RUN BACK — MATCH FOUND",
+            "poll_interval": 1.0,
+        }
+
+    def save_settings(self) -> None:
+        config = self.get_current_config()
+        save_config(config)
+        self.status_var.set("Settings saved")
+
+    def test_discord(self) -> None:
+        config = self.get_current_config()
+        success = send_discord_message(
+            webhook_url=config["discord_webhook_url"],
+            message=config["custom_message"],
+            mention_user_id=config["mention_user_id"],
+        )
+
+        if success:
+            self.status_var.set("Test notification sent")
+        else:
+            self.status_var.set("Test notification failed")
 
     def toggle_monitoring(self) -> None:
         if not self.monitoring_enabled:
@@ -54,6 +103,14 @@ class App:
             self.stop_monitoring()
 
     def start_monitoring(self) -> None:
+        config = self.get_current_config()
+
+        if not config["discord_webhook_url"]:
+            self.status_var.set("Please enter a Discord webhook URL")
+            return
+
+        save_config(config)
+
         self.monitoring_enabled = True
         self.notification_sent = False
         self.stop_event.clear()
@@ -90,10 +147,14 @@ class App:
                     self.root.after(0, self.status_var.set, "Match found")
 
                     if not self.notification_sent:
+                        config = load_config()
+
                         success = send_discord_message(
-    			"RUN BACK — MATCH FOUND",
-    			mention_user_id="123456789012345678",
-			)
+                            webhook_url=config.get("discord_webhook_url", ""),
+                            message=config.get("custom_message", "RUN YOU FOOL"),
+                            mention_user_id=config.get("mention_user_id", ""),
+                        )
+
                         if success:
                             self.notification_sent = True
                             self.root.after(0, self.status_var.set, "Notification sent")
@@ -101,7 +162,7 @@ class App:
                             self.root.after(0, self.status_var.set, "Failed to send notification")
 
                 else:
-                    self.root.after(0, self.status_var.set, f"Monitoring queue")
+                    self.root.after(0, self.status_var.set, "Monitoring queue")
                     self.notification_sent = False
 
             except Exception as exc:
@@ -117,7 +178,7 @@ class App:
 
 def main() -> None:
     root = tk.Tk()
-    app = App(root)
+    App(root)
     root.mainloop()
 
 

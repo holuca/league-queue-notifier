@@ -5,20 +5,26 @@ APP_DIR = Path.home() / "AppData" / "Local" / "LoLQueueNotifier"
 CONFIG_PATH = APP_DIR / "config.json"
 
 
+def default_config() -> dict:
+    return {
+        "discord_webhook_url": "",
+        "mention_user_id": "",
+        "custom_message": "RUN BACK YOU FOOL",
+        "poll_interval": 1.0,
+    }
+
+
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
-        return {
-            "discord_webhook_url": "",
-            "poll_interval": 1.0,
-        }
+        return default_config()
 
     try:
-        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+        merged = default_config()
+        merged.update(data)
+        return merged
     except Exception:
-        return {
-            "discord_webhook_url": "",
-            "poll_interval": 1.0,
-        }
+        return default_config()
 
 
 def save_config(config: dict) -> None:
